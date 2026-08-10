@@ -1,0 +1,38 @@
+# Local workflow output
+work/
+output/
+cache/
+reports/
+backups/
+*.log
+
+# Secrets and local configuration
+.env
+.env.*
+*.key
+*.token
+tools/.nexus_api_key
+
+# MO2 / Skyrim runtime data: never publish these from a live installation
+mo2/
+mods/
+profiles/
+overwrite/
+downloads/
+Data/
+saves/
+SKSE/
+*.esp
+*.esm
+*.esl
+*.bsa
+*.ba2
+*.dds
+*.nif
+*.hkx
+*.tri
+*.dll
+
+# PowerShell temporary files
+*.tmp
+*.bak

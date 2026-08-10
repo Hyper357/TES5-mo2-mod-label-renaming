@@ -1,0 +1,21 @@
+{
+  "format": "{anchor}·{local} — {english} — {tags}",
+  "separator": " — ",
+  "tagDelimiters": ["【", "】"],
+  "reservedTerms": {
+    "Overhaul": "大修",
+    "Rework": "重制",
+    "Remade": "重制",
+    "Redone": "重制",
+    "Fix": "修复",
+    "Patch": "补丁",
+    "Framework": "框架",
+    "Replacer": "替换",
+    "Distribution": "分发",
+    "Addon": "扩展",
+    "Expansion": "扩展"
+  },
+  "preserveAcronyms": ["SKSE", "SPID", "OAR", "MCO", "3BA", "CBBE", "HIMBO", "SMP", "AE", "SE", "VR", "NG", "PBR", "BOS", "KID"],
+  "confidenceValues": ["高", "中", "低"],
+  "seriesPolicy": "同作者不等于同系列；必须有标题、页面说明、合集、依赖或作者声明支持。"
+}
