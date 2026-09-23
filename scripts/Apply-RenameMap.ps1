@@ -50,19 +50,33 @@ function Get-Manifest {
     $result
 }
 
+function Get-LineEnding {
+    param([string]$Text)
+    if ($Text.Contains("`r`n")) { return "`r`n" }
+    return "`n"
+}
+
 function Replace-ExactModlistEntries {
-    param([string]$Text, [object[]]$Map)
-    $lineEnding = if ($Text.Contains("`r`n")) { "`r`n" } else { "`n" }
-    $parts = $Text -split '\r\n|\n|\r', -1
+    param([string[]]$Lines, [object[]]$Map, [string]$LineEnding, [bool]$TrailingNewline)
+    # 用调用方 ReadAllLines 得到的行数组做替换，不要自行对原始文本 -split。
+    # ReadAllLines 是全部脚本统一采用、且已在多个 PowerShell 版本上验证过的读取路径；
+    # 自行 split 会让解析结果随宿主版本变化（CI 上曾出现行匹配数恒为 0）。
+    $parts = @($Lines)
     foreach ($item in $Map) {
         $replaced = 0
         for ($i = 0; $i -lt $parts.Count; $i++) {
             if ($parts[$i] -eq ('+' + $item.OldName)) { $parts[$i] = '+' + $item.NewName; $replaced++ }
             elseif ($parts[$i] -eq ('-' + $item.OldName)) { $parts[$i] = '-' + $item.NewName; $replaced++ }
         }
-        if ($replaced -ne 1) { throw "modlist.txt 中无法精确替换：$($item.OldName)，匹配数 $replaced" }
+        if ($replaced -ne 1) {
+            $probe = @($parts | Where-Object { $_ -like ('*' + $item.OldName + '*') } | Select-Object -First 3) -join ' ‖ '
+            throw ("modlist.txt 中无法精确替换：{0}，匹配数 {1}；读取行数 {2}；含该名称的行：[{3}]" -f $item.OldName, $replaced, $parts.Count, $probe)
+        }
     }
-    [string]::Join($lineEnding, $parts)
+    $joined = [string]::Join($LineEnding, $parts)
+    # ReadAllLines 不保留结尾换行，而 MO2 写出的 modlist.txt 是带尾随换行的，必须补回。
+    if ($TrailingNewline) { $joined += $LineEnding }
+    return $joined
 }
 
 if (-not (Test-Path -LiteralPath $PreviewPath -PathType Leaf)) { throw "Preview 不存在：$PreviewPath" }
@@ -89,6 +103,8 @@ foreach ($item in $map) {
 
 $liveText = [IO.File]::ReadAllText($profileModlist)
 $liveLines = [IO.File]::ReadAllLines($profileModlist)
+$lineEnding = Get-LineEnding -Text $liveText
+$trailingNewline = $liveText.EndsWith("`n") -or $liveText.EndsWith("`r")
 foreach ($item in $map) {
     $hits = @($liveLines | Where-Object { $_ -eq ('+' + $item.OldName) -or $_ -eq ('-' + $item.OldName) })
     if ($hits.Count -ne 1) { throw "源名称在 modlist.txt 中不是恰好一条：$($item.OldName)" }
@@ -145,7 +161,7 @@ try {
         [void]$moved.Add($item)
     }
 
-    $rewritten = Replace-ExactModlistEntries -Text $liveText -Map $map
+    $rewritten = Replace-ExactModlistEntries -Lines $liveLines -Map $map -LineEnding $lineEnding -TrailingNewline $trailingNewline
     $tempModlist = Join-Path $ProfilePath ('.modlist.rename.' + [guid]::NewGuid().ToString() + '.tmp')
     [IO.File]::WriteAllText($tempModlist, $rewritten, [Text.UTF8Encoding]::new($false))
     Move-Item -LiteralPath $tempModlist -Destination $profileModlist -Force
