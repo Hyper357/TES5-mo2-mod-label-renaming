@@ -1,0 +1,43 @@
+name: validate
+
+# Runs the repository's own acceptance test. On a clean runner no MO2/Skyrim
+# process exists, so Test-Project.ps1 executes the FULL chain against the
+# fixture copy in %TEMP%: script syntax → preview → apply → verify.
+# Locally the same script stops after the preview step when the user's MO2 is
+# running, which is why this job is the authoritative gate.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report environment
+        run: |
+          $PSVersionTable | Out-String | Write-Host
+          Get-ChildItem -Recurse -File | Select-Object -ExpandProperty FullName | Write-Host
+
+      - name: Run project validation
+        run: ./scripts/Test-Project.ps1
+
+      - name: Verify no stray artifacts were left in the repo
+        run: |
+          $dirty = git status --porcelain
+          if ($dirty) {
+            Write-Error "Validation left changes in the working tree:`n$dirty"
+          }
+          Write-Host 'Working tree clean.'
