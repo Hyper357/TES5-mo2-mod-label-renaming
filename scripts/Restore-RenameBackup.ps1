@@ -41,7 +41,9 @@ else {
         $oldPath = Join-Path $ModsPath $item.OldName
         if (Test-Path -LiteralPath $oldPath -PathType Container) { continue }
         if (-not (Test-Path -LiteralPath $newPath -PathType Container)) { throw "当前文件夹不存在，无法改回旧名：$($item.NewName)" }
-        Rename-Item -LiteralPath $newPath -NewName $item.OldName -ErrorAction Stop
+        # 与 Apply-RenameMap.ps1 一致：用 .NET 字面量改名，避开 Rename-Item -NewName
+        # 在不同 PowerShell 版本下对通配符字符的处理差异。
+        [IO.Directory]::Move($newPath, $oldPath)
     }
 }
 

@@ -136,7 +136,12 @@ Export-Utf8Csv -Data @($manifest) -Path (Join-Path $BackupPath 'folder-manifest-
 $moved = [System.Collections.Generic.List[object]]::new()
 try {
     foreach ($item in $map) {
-        Rename-Item -LiteralPath (Join-Path $ModsPath $item.OldName) -NewName $item.NewName -ErrorAction Stop
+        $sourcePath = Join-Path $ModsPath $item.OldName
+        $targetPath = Join-Path $ModsPath $item.NewName
+        # 用 .NET 做字面量改名，而不是 Rename-Item -NewName：
+        # -NewName 在不同 PowerShell 版本下对通配符字符（尤其方括号）的处理不一致，
+        # 而 2.0 命名规范的 [母体作者] 前缀会让目标名必然带方括号。
+        [IO.Directory]::Move($sourcePath, $targetPath)
         [void]$moved.Add($item)
     }
 
@@ -146,13 +151,32 @@ try {
     Move-Item -LiteralPath $tempModlist -Destination $profileModlist -Force
 }
 catch {
-    foreach ($item in @($moved | Select-Object -Reverse)) {
-        $newPath = Join-Path $ModsPath $item.NewName
-        $oldPath = Join-Path $ModsPath $item.OldName
-        if ((Test-Path -LiteralPath $newPath) -and -not (Test-Path -LiteralPath $oldPath)) { Rename-Item -LiteralPath $newPath -NewName $item.OldName -ErrorAction SilentlyContinue }
+    $applyError = $_
+
+    # 逆序回滚已改名的文件夹。用逆序 for 循环而不是 Select-Object -Reverse：
+    # Select-Object 没有 -Reverse 参数，这行本身会抛终止错误并掩盖真正的异常。
+    # 每步都独立 try/catch，清理失败同样不得掩盖原始异常。
+    for ($i = $moved.Count - 1; $i -ge 0; $i--) {
+        $item = $moved[$i]
+        try {
+            $newPath = Join-Path $ModsPath $item.NewName
+            $oldPath = Join-Path $ModsPath $item.OldName
+            if ((Test-Path -LiteralPath $newPath) -and -not (Test-Path -LiteralPath $oldPath)) {
+                [IO.Directory]::Move($newPath, $oldPath)
+            }
+        }
+        catch { }
     }
-    Copy-Item -LiteralPath (Join-Path $BackupPath 'modlist.txt') -Destination $profileModlist -Force
-    throw
+    try { Copy-Item -LiteralPath (Join-Path $BackupPath 'modlist.txt') -Destination $profileModlist -Force -ErrorAction Stop }
+    catch { }
+
+    # 必须用 Write-Output 而不是 Write-Error：调用方可能设置了
+    # $ErrorActionPreference='Stop'，那会把 Write-Error 变成终止错误，
+    # 于是原始异常再次被掩盖 —— 这正是之前 CI 只看到 'Reverse' 报错的原因。
+    Write-Output "Apply-RenameMap 失败：$($applyError.Exception.Message)"
+    Write-Output "  位置：$($applyError.InvocationInfo.PositionMessage.Trim())"
+    Write-Output "  宿主：PowerShell $($PSVersionTable.PSVersion) / $($PSVersionTable.PSEdition)"
+    throw $applyError
 }
 
 $postLines = [IO.File]::ReadAllLines($profileModlist)
