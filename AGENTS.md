@@ -14,10 +14,16 @@ Safety rules:
 
 - Never upload `mo2/mods`, `Data`, downloads, overwrite, save files, browser profiles, API keys, or backups to this repository.
 - Never edit ESP/ESM/ESL/BSA/BA2 files.
-- Never change `plugins.txt`, `loadorder.txt`, enablement, or sorting as part of a rename operation.
+- **Default: never change `plugins.txt`, `loadorder.txt`, enablement, or MO2 left-pane sorting as part of a rename operation.**
+  The sorting + empty-mod-spacer extension documented in `docs/sorting-and-spacers.md` is **opt-in only**:
+  do not apply it, and do not mix it into a rename batch, unless the user has explicitly asked for sorting
+  in that same request. If a request is ambiguous about whether sorting is wanted, ask — do not assume.
 - Never use a guessed series relationship as a confirmed fact.
 - Close MO2 and Skyrim processes before applying a rename map.
-- Back up the target folders and `modlist.txt` before changing them.
+- Back up `modlist.txt` and a per-folder manifest (file count, total size) before changing them; copy folder contents only when `-CopyFolders` is requested.
+- **Never let a generated script or template hardcode an absolute install path.** Derive every path from
+  the caller-supplied root, or a sandboxed test run will silently write into the user's real install.
+See `docs/safety-and-recovery.md` → "路径隔离" for the incident that established this rule.
 
 The normal sequence is:
 

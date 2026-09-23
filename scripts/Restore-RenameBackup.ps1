@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$BackupPath,
     [Parameter(Mandatory)] [string]$ModsPath,
@@ -20,16 +20,29 @@ if (-not (Test-Path -LiteralPath $backupModlist -PathType Leaf)) { throw "备份
 
 $map = @(Import-Csv -LiteralPath $mapPath)
 $quarantine = Join-Path $BackupPath ('rollback-quarantine-' + (Get-Date -Format 'yyyyMMdd_HHmmss'))
-New-Item -ItemType Directory -Path $quarantine -Force | Out-Null
+$fullBackup = Test-Path -LiteralPath $backupMods -PathType Container
 
-foreach ($item in $map) {
-    $newPath = Join-Path $ModsPath $item.NewName
-    $oldPath = Join-Path $ModsPath $item.OldName
-    $backupOld = Join-Path $backupMods $item.OldName
-    if (-not (Test-Path -LiteralPath $backupOld -PathType Container)) { throw "备份缺少源文件夹：$($item.OldName)" }
-    if (Test-Path -LiteralPath $oldPath) { throw "恢复会覆盖已有旧文件夹，已停止：$($item.OldName)" }
-    if (Test-Path -LiteralPath $newPath) { Move-Item -LiteralPath $newPath -Destination $quarantine -Force }
-    Copy-Item -LiteralPath $backupOld -Destination $ModsPath -Recurse -Force
+if ($fullBackup) {
+    New-Item -ItemType Directory -Path $quarantine -Force | Out-Null
+    foreach ($item in $map) {
+        $newPath = Join-Path $ModsPath $item.NewName
+        $oldPath = Join-Path $ModsPath $item.OldName
+        $backupOld = Join-Path $backupMods $item.OldName
+        if (-not (Test-Path -LiteralPath $backupOld -PathType Container)) { throw "备份缺少源文件夹：$($item.OldName)" }
+        if (Test-Path -LiteralPath $oldPath) { throw "恢复会覆盖已有旧文件夹，已停止：$($item.OldName)" }
+        if (Test-Path -LiteralPath $newPath) { Move-Item -LiteralPath $newPath -Destination $quarantine -Force }
+        Copy-Item -LiteralPath $backupOld -Destination $ModsPath -Recurse -Force
+    }
+}
+else {
+    $quarantine = ''
+    foreach ($item in $map) {
+        $newPath = Join-Path $ModsPath $item.NewName
+        $oldPath = Join-Path $ModsPath $item.OldName
+        if (Test-Path -LiteralPath $oldPath -PathType Container) { continue }
+        if (-not (Test-Path -LiteralPath $newPath -PathType Container)) { throw "当前文件夹不存在，无法改回旧名：$($item.NewName)" }
+        Rename-Item -LiteralPath $newPath -NewName $item.OldName -ErrorAction Stop
+    }
 }
 
 Copy-Item -LiteralPath $backupModlist -Destination (Join-Path $ProfilePath 'modlist.txt') -Force
@@ -41,5 +54,6 @@ if ($RestorePluginAndLoadorder) {
 }
 
 Write-Output "Restored=$($map.Count)"
+Write-Output "Mode=$(if ($fullBackup) { 'full-folder-copy' } else { 'rename-back' })"
 Write-Output "Quarantine=$quarantine"
 Write-Output "PluginLoadorderRestored=$($RestorePluginAndLoadorder.IsPresent)"

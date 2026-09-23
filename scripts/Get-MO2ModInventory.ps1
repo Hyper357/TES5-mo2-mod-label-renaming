@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory)]
     [string]$ModsPath,
@@ -12,7 +12,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Export-Utf8NoBom {
+function Export-Utf8Csv {
     param(
         [Parameter(Mandatory)] [object[]]$Data,
         [Parameter(Mandatory)] [string]$Path
@@ -24,7 +24,7 @@ function Export-Utf8NoBom {
     try {
         $Data | Export-Csv -LiteralPath $temp -NoTypeInformation -Encoding utf8
         $text = [IO.File]::ReadAllText($temp)
-        [IO.File]::WriteAllText($Path, $text, [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($Path, $text, [Text.UTF8Encoding]::new($true))
     }
     finally {
         Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
@@ -104,7 +104,7 @@ foreach ($line in [IO.File]::ReadAllLines($modlistPath)) {
 }
 
 if ($OutputPath) {
-    Export-Utf8NoBom -Data @($rows) -Path $OutputPath
+    Export-Utf8Csv -Data @($rows) -Path $OutputPath
     Write-Output "Inventory=$OutputPath"
     Write-Output "Rows=$($rows.Count)"
     Write-Output "MissingFolders=$(@($rows | Where-Object { -not $_.FolderExists }).Count)"

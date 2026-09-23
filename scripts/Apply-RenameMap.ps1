@@ -1,24 +1,40 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$PreviewPath,
     [Parameter(Mandatory)] [string]$ModsPath,
     [Parameter(Mandatory)] [string]$ProfilePath,
-    [string]$BackupPath
+    [string]$BackupPath,
+    [switch]$CopyFolders
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Export-Utf8NoBom {
+function Export-Utf8Csv {
     param([Parameter(Mandatory)] [object[]]$Data, [Parameter(Mandatory)] [string]$Path)
     $parent = Split-Path -Parent $Path
     if ($parent) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("mod-apply-" + [guid]::NewGuid().ToString() + '.csv')
     try {
         $Data | Export-Csv -LiteralPath $temp -NoTypeInformation -Encoding utf8
-        [IO.File]::WriteAllText($Path, [IO.File]::ReadAllText($temp), [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($Path, [IO.File]::ReadAllText($temp), [Text.UTF8Encoding]::new($true))
     }
     finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+}
+
+function Get-OtherProfileModlists {
+    param([Parameter(Mandatory)] [string]$ProfilePath)
+    $profilesRoot = Split-Path -Parent $ProfilePath
+    $current = [IO.Path]::GetFullPath($ProfilePath).TrimEnd('\')
+    $result = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $profilesRoot -PathType Container) {
+        foreach ($dir in @(Get-ChildItem -LiteralPath $profilesRoot -Directory -ErrorAction SilentlyContinue)) {
+            if ([IO.Path]::GetFullPath($dir.FullName).TrimEnd('\') -eq $current) { continue }
+            $modlist = Join-Path $dir.FullName 'modlist.txt'
+            if (Test-Path -LiteralPath $modlist -PathType Leaf) { [void]$result.Add($modlist) }
+        }
+    }
+    @($result)
 }
 
 function Get-Manifest {
@@ -78,20 +94,30 @@ foreach ($item in $map) {
     if ($hits.Count -ne 1) { throw "源名称在 modlist.txt 中不是恰好一条：$($item.OldName)" }
 }
 
+foreach ($otherModlist in (Get-OtherProfileModlists -ProfilePath $ProfilePath)) {
+    $otherLines = @([IO.File]::ReadAllLines($otherModlist))
+    $profileName = [IO.Path]::GetFileName([IO.Path]::GetDirectoryName($otherModlist))
+    foreach ($item in $map) {
+        if (@($otherLines | Where-Object { $_ -eq ('+' + $item.OldName) -or $_ -eq ('-' + $item.OldName) }).Count -gt 0) {
+            throw "OldName 同时出现在其他 profile（$profileName），应用会破坏该 profile：$($item.OldName)"
+        }
+    }
+}
+
 if (-not $BackupPath) {
     $backupRoot = Join-Path (Split-Path -Parent $ProfilePath) 'mod-label-renaming-backups'
     $BackupPath = Join-Path $backupRoot ('rename_' + (Get-Date -Format 'yyyyMMdd_HHmmss'))
 }
 New-Item -ItemType Directory -Path $BackupPath -Force | Out-Null
 $backupMods = Join-Path $BackupPath 'mods'
-New-Item -ItemType Directory -Path $backupMods -Force | Out-Null
+if ($CopyFolders) { New-Item -ItemType Directory -Path $backupMods -Force | Out-Null }
 Copy-Item -LiteralPath $profileModlist -Destination (Join-Path $BackupPath 'modlist.txt') -Force
 foreach ($configName in @('plugins.txt', 'loadorder.txt')) {
     $configPath = Join-Path $ProfilePath $configName
     if (Test-Path -LiteralPath $configPath -PathType Leaf) { Copy-Item -LiteralPath $configPath -Destination (Join-Path $BackupPath $configName) -Force }
 }
 Copy-Item -LiteralPath $PreviewPath -Destination (Join-Path $BackupPath 'preview.csv') -Force
-$map | Export-Csv -LiteralPath (Join-Path $BackupPath 'rename-map.csv') -NoTypeInformation -Encoding utf8
+Export-Utf8Csv -Data @($map) -Path (Join-Path $BackupPath 'rename-map.csv')
 
 $manifest = [System.Collections.Generic.List[object]]::new()
 foreach ($item in $map) {
@@ -101,11 +127,11 @@ foreach ($item in $map) {
         OldName = $item.OldName
         NewName = $item.NewName
         FileCount = $files.Count
-        TotalBytes = (($files | Measure-Object -Property Length -Sum).Sum)
+        TotalBytes = if ($files.Count -gt 0) { (($files | Measure-Object -Property Length -Sum).Sum) } else { 0 }
     })
-    Copy-Item -LiteralPath $source -Destination $backupMods -Recurse -Force
+    if ($CopyFolders) { Copy-Item -LiteralPath $source -Destination $backupMods -Recurse -Force }
 }
-Export-Utf8NoBom -Data @($manifest) -Path (Join-Path $BackupPath 'folder-manifest-before.csv')
+Export-Utf8Csv -Data @($manifest) -Path (Join-Path $BackupPath 'folder-manifest-before.csv')
 
 $moved = [System.Collections.Generic.List[object]]::new()
 try {
@@ -139,4 +165,5 @@ foreach ($item in $map) {
 
 Write-Output "Applied=$($map.Count)"
 Write-Output "Backup=$BackupPath"
+Write-Output "BackupMode=$(if ($CopyFolders) { 'full-folder-copy' } else { 'manifest-only' })"
 Write-Output "PluginsLoadorder=backed-up-read-only"

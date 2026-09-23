@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$MapPath,
     [Parameter(Mandatory)] [string]$ModsPath,
@@ -9,16 +9,31 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Export-Utf8NoBom {
+function Export-Utf8Csv {
     param([Parameter(Mandatory)] [object[]]$Data, [Parameter(Mandatory)] [string]$Path)
     $parent = Split-Path -Parent $Path
     if ($parent) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("mod-preview-" + [guid]::NewGuid().ToString() + '.csv')
     try {
         $Data | Export-Csv -LiteralPath $temp -NoTypeInformation -Encoding utf8
-        [IO.File]::WriteAllText($Path, [IO.File]::ReadAllText($temp), [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($Path, [IO.File]::ReadAllText($temp), [Text.UTF8Encoding]::new($true))
     }
     finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+}
+
+function Get-OtherProfileModlists {
+    param([Parameter(Mandatory)] [string]$ProfilePath)
+    $profilesRoot = Split-Path -Parent $ProfilePath
+    $current = [IO.Path]::GetFullPath($ProfilePath).TrimEnd('\')
+    $result = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path -LiteralPath $profilesRoot -PathType Container) {
+        foreach ($dir in @(Get-ChildItem -LiteralPath $profilesRoot -Directory -ErrorAction SilentlyContinue)) {
+            if ([IO.Path]::GetFullPath($dir.FullName).TrimEnd('\') -eq $current) { continue }
+            $modlist = Join-Path $dir.FullName 'modlist.txt'
+            if (Test-Path -LiteralPath $modlist -PathType Leaf) { [void]$result.Add($modlist) }
+        }
+    }
+    @($result)
 }
 
 if (-not (Test-Path -LiteralPath $MapPath -PathType Leaf)) { throw "Rename map 不存在：$MapPath" }
@@ -31,6 +46,9 @@ $modlistPath = Join-Path $ProfilePath 'modlist.txt'
 if (-not (Test-Path -LiteralPath $modlistPath -PathType Leaf)) { throw "缺少 modlist.txt：$modlistPath" }
 
 $lines = [IO.File]::ReadAllLines($modlistPath)
+$otherProfiles = Get-OtherProfileModlists -ProfilePath $ProfilePath
+$otherLines = @{}
+foreach ($other in $otherProfiles) { $otherLines[[string]$other] = @([IO.File]::ReadAllLines($other)) }
 $rows = [System.Collections.Generic.List[object]]::new()
 $targetSet = @{}
 $errors = [System.Collections.Generic.List[string]]::new()
@@ -56,6 +74,13 @@ foreach ($item in $map) {
     if ($matches.Count -eq 0) { [void]$rowErrors.Add('OldName未在modlist.txt中找到') }
     if ($matches.Count -gt 1) { [void]$rowErrors.Add('OldName在modlist.txt中出现多次') }
 
+    $otherRefs = [System.Collections.Generic.List[string]]::new()
+    foreach ($entry in $otherLines.GetEnumerator()) {
+        $found = @($entry.Value | Where-Object { $_ -eq ('+' + $old) -or $_ -eq ('-' + $old) })
+        if ($found.Count -gt 0) { [void]$otherRefs.Add([IO.Path]::GetFileName([IO.Path]::GetDirectoryName($entry.Key))) }
+    }
+    if ($otherRefs.Count -gt 0) { [void]$rowErrors.Add("OldName同时出现在其他profile：$($otherRefs -join '、')（应用会破坏该profile）") }
+
     $oldPath = Join-Path $ModsPath $old
     $newPath = Join-Path $ModsPath $new
     $oldExists = Test-Path -LiteralPath $oldPath -PathType Container
@@ -63,7 +88,10 @@ foreach ($item in $map) {
     if (-not $oldExists) { [void]$rowErrors.Add('OldName文件夹不存在') }
     if ($newExists -and $old -ne $new) { [void]$rowErrors.Add('NewName文件夹已经存在') }
 
-    $files = if ($oldExists) { @(Get-ChildItem -LiteralPath $oldPath -File -Recurse -ErrorAction SilentlyContinue) } else { @() }
+    $files = @()
+    if ($oldExists) { $files = @(Get-ChildItem -LiteralPath $oldPath -File -Recurse -ErrorAction SilentlyContinue) }
+    $totalBytes = 0
+    if ($files.Count -gt 0) { $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum }
     $changed = $old -cne $new
     $status = if ($rowErrors.Count -eq 0 -and $changed) { 'Ready' } elseif (-not $changed) { 'NoChange' } else { 'Blocked' }
     if ($rowErrors.Count -gt 0) { foreach ($message in $rowErrors) { [void]$errors.Add("$old：$message") } }
@@ -79,18 +107,19 @@ foreach ($item in $map) {
         FolderExists = $oldExists
         TargetExists = $newExists
         FileCount = $files.Count
-        TotalBytes = (($files | Measure-Object -Property Length -Sum).Sum)
+        TotalBytes = $totalBytes
         Reason = [string]$item.Reason
         Confidence = [string]$item.Confidence
         SourceUrl = [string]$item.SourceUrl
         ReviewNote = [string]$item.ReviewNote
         ValidationStatus = $status
         ValidationErrors = ($rowErrors -join '；')
+        OtherProfileRefs = ($otherRefs -join '、')
         ReadyToApply = ($status -eq 'Ready')
     })
 }
 
-Export-Utf8NoBom -Data @($rows) -Path $OutputPath
+Export-Utf8Csv -Data @($rows) -Path $OutputPath
 Write-Output "Preview=$OutputPath"
 Write-Output "Rows=$($rows.Count)"
 Write-Output "Ready=$(@($rows | Where-Object { $_.ReadyToApply }).Count)"

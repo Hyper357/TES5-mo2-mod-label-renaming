@@ -1,2 +1,2 @@
 OldName,NewName,Reason,Confidence,SourceUrl,ReviewNote
-Example Mod,示例·测试 — Example Mod — 【工具】【作者·Example】,示范一条已核对的普通工具命名,高,https://example.com/mod,仅用于测试脚本，不对应真实 MOD
+Example Mod,[Example] 示例工具 - 基础本体 — Example Mod — 【技术·框架】,示范 2.0 格式：母体作者前缀 + 中文功能名 - 变体 + 官方英文标题 + 标签池,高,https://example.com/mod,仅用于测试脚本，不对应真实 MOD；实际填表时标签须从 config/tag-vocabulary.json 选取

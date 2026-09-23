@@ -16,6 +16,12 @@
 9. 验证并报告未确定项
 ```
 
+批量场景（一个分隔区或 50+ 条）额外建议：
+
+- 先跑 `Get-TagStatistics.ps1` 核对现有标签用法，避免与已命名条目的标签体系脱节；
+- 用 `New-RenameMapDraft.ps1` 生成初稿，只处理 `Status=待补中文名` 的行；
+- 任何 OldName 出现在其他 profile 的 `modlist.txt` 时，预览会标记 Blocked——不要绕过，先处理 profile 同步或删除多余 profile。
+
 ## AI 输出最低要求
 
 预览表和回答中应包含：

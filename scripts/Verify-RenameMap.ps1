@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$PreviewPath,
     [Parameter(Mandatory)] [string]$BackupPath,
@@ -30,6 +30,15 @@ $lines = [IO.File]::ReadAllLines($modlistPath)
 $errors = [System.Collections.Generic.List[string]]::new()
 $rows = [System.Collections.Generic.List[object]]::new()
 
+$manifestPath = Join-Path $BackupPath 'folder-manifest-before.csv'
+$manifest = @{}
+if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+    foreach ($row in (Import-Csv -LiteralPath $manifestPath)) {
+        $manifest[[string]$row.NewName] = $row
+        if (-not $manifest.ContainsKey([string]$row.OldName)) { $manifest[[string]$row.OldName] = $row }
+    }
+}
+
 foreach ($item in $map) {
     $current = Join-Path $ModsPath $item.NewName
     $before = Join-Path (Join-Path $BackupPath 'mods') $item.OldName
@@ -53,6 +62,19 @@ foreach ($item in $map) {
         }
         $contentMatch = ($diff.Count -eq 0)
         if (-not $contentMatch) { [void]$errors.Add("内容校验失败：$($item.NewName)") }
+    }
+    elseif ($currentExists -and $manifest.ContainsKey([string]$item.NewName)) {
+        $row = $manifest[[string]$item.NewName]
+        $files = @(Get-ChildItem -LiteralPath $current -File -Recurse -ErrorAction SilentlyContinue)
+        $count = $files.Count
+        $bytes = [int64](($files | Measure-Object -Property Length -Sum).Sum)
+        $expectedCount = [int][string]$row.FileCount
+        $expectedBytes = [int64][string]$row.TotalBytes
+        $contentMatch = ($count -eq $expectedCount) -and ($bytes -eq $expectedBytes)
+        if (-not $contentMatch) { [void]$errors.Add("内容校验失败（manifest）：$($item.NewName) 文件数 $count/$expectedCount 大小 $bytes/$expectedBytes") }
+    }
+    elseif ($currentExists) {
+        [void]$errors.Add("缺少内容基线（既无 mods 备份也无 folder-manifest-before.csv）：$($item.NewName)")
     }
 
     [void]$rows.Add([pscustomobject]@{

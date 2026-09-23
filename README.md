@@ -1,4 +1,4 @@
-# MOD 标签与重命名工作流
+﻿# MOD 标签与重命名工作流
 
 一个面向 Skyrim Special Edition / Anniversary Edition、Mod Organizer 2（MO2）的可复用 MOD 整理流程。
 
@@ -30,24 +30,38 @@
 
 ## 核心命名格式
 
+当前规范 **2.0**。
+
 ```text
-系列锚点·中文功能名·变体 — Official English Title — 【分类·标签】【作者·作者名】【系列·系列名】
+[母体作者] 中文功能名 - 变体/层级 (by 补丁作者) — Official English Title — 【分类·标签】 【技术·标签】
 ```
 
 示例：
 
 ```text
-Skyrim 3D系列·3D岩石·PBR — Skyrim 3D Rocks PBR — 【材质·PBR】【材质·替换】【材质·环境】【系列·Skyrim 3D】【作者·Cl3mus】
+[4thUnknown] 伊斯拉米尔护甲 - 基础本体 — Ysmir Armor SE — 【服装·护甲】 【本体·ESP】
+[4thUnknown] 伊斯拉米尔护甲 - SPID独立分发补丁 (by Leo) — SPID - Ysmir Armor — 【系统·分发】 【补丁·SPID】
 ```
 
 规则重点：
 
+- **中括号前缀永远属于原作者母体**（`[4thUnknown]`）。补丁/材质作者后置为 `(by Leo)`，不得占据前缀。前缀同时承担"同作者条目在 MO2 左栏聚成一簇"的职责。
+- **禁用密集点号 `·` 作为名称主体分隔符**，改用带空格的短横线 ` - `。点号只允许出现在标签内部（`【服装·护甲】`）。
+- **标签之间留一个半角空格**：`【服装·护甲】 【体型·3BA】`，不要写 `【服装·护甲】【体型·3BA】`。
+- 中段统一 ` — `（em dash 两侧半角空格），工具脚本按它切分英文标题。
 - 作者名、正式品牌名和系列品牌保留原文，不随意音译。
 - 官方英文标题保留，功能性中文放在前面。
 - `Overhaul` → `大修`，`Rework/Remade` → `重制`，`Fix` → `修复`，`Patch` → `补丁`，`Replacer` → `替换`。
 - `SKSE`、`SPID`、`OAR`、`MCO`、`3BA`、`CBBE`、`SMP`、`AE`、`NG`、`PBR` 等缩写保留。
 - 同作者不自动等于同系列；只有 Nexus 标题、说明、合集、依赖或作者声明能够证明时才建立系列。
 - 标签必须嵌入名称末尾，不能只写在外部表格里，否则 MO2 内无法直接筛选和审阅。
+- **存量 1.x 名称不为格式而重命名**，只在因其它原因触碰该条时顺带升级。
+
+完整标准见 [`docs/naming-standard.md`](docs/naming-standard.md)。
+
+> **排序与空 Mod 垫片不在本流程的默认范围。** 那是一项显式启用的扩展，见
+> [`docs/sorting-and-spacers.md`](docs/sorting-and-spacers.md)。默认流程不改排序、不改启用状态、不动
+> `plugins.txt` / `loadorder.txt`。
 
 ## 快速开始
 
@@ -84,13 +98,28 @@ pwsh -File .\scripts\Build-AuthorSeriesRegistry.ps1 `
   -CachePath '.\work\nexus-cache.csv'
 ```
 
-### 3. 准备重命名表
+### 3. 标签统计与初稿（可选，批量场景推荐）
 
-复制 `examples/rename-map.csv`，为当前批次填写：
+先扫现有名称的真实标签用法，作为词库冻结依据；再从 inventory + registry 自动生成 rename map 初稿（已命名条目不动，未命名条目给出英文名、系列/作者候选，中文功能名留空待人工填写）：
+
+```powershell
+pwsh -File .\scripts\Get-TagStatistics.ps1 `
+  -ProfilePath 'E:\SkyrimAE\mo2\profiles\Default' `
+  -OutputPath '.\work\tag-statistics.csv'
+
+pwsh -File .\scripts\New-RenameMapDraft.ps1 `
+  -InventoryPath '.\work\inventory.csv' `
+  -RegistryPath '.\work\author-series-registry.csv' `
+  -OutputPath '.\work\rename-map-draft.csv'
+```
+
+### 4. 准备重命名表
+
+复制 `examples/rename-map.csv`（或从初稿中挑选本批次行），为当前批次填写：
 
 | 字段 | 是否必需 | 说明 |
 |---|---:|---|
-| `OldName` | 是 | `modlist.txt` 和实际文件夹中的当前名称 |
+| `OldName` | 是 | `modlist.txt` 和实际文件夹中的当前名称（必须与现有名称完全一致，含标签） |
 | `NewName` | 是 | 最终写入文件夹和 `modlist.txt` 的完整名称 |
 | `Reason` | 否 | 页面核对后的功能/系列判断 |
 | `Confidence` | 否 | `高`、`中`、`低` |
@@ -99,7 +128,7 @@ pwsh -File .\scripts\Build-AuthorSeriesRegistry.ps1 `
 
 这一步是翻译和判断的主要位置。不要让脚本猜测中文名，也不要把未核实的标题直接当作最终名称。
 
-### 4. 生成预览
+### 5. 生成预览
 
 ```powershell
 pwsh -File .\scripts\New-RenamePreview.ps1 `
@@ -109,9 +138,9 @@ pwsh -File .\scripts\New-RenamePreview.ps1 `
   -OutputPath '.\work\rename-preview.csv'
 ```
 
-只有所有目标文件夹、`modlist.txt` 条目、名称冲突和 Windows 文件名检查都通过，预览才会标记为 `ReadyToApply=True`。
+只有所有目标文件夹、`modlist.txt` 条目、名称冲突、Windows 文件名检查都通过，且 OldName 未同时出现在其他 profile 的 `modlist.txt` 中，预览才会标记为 `ReadyToApply=True`。所有 CSV 导出为带 BOM 的 UTF-8，可直接用 Excel 打开审阅。
 
-### 5. 审阅后应用
+### 6. 审阅后应用
 
 应用前必须关闭 MO2、SkyrimSE、Skyrim Launcher。应用脚本只处理预览中通过校验的目标：
 
@@ -122,9 +151,9 @@ pwsh -File .\scripts\Apply-RenameMap.ps1 `
   -ProfilePath 'E:\SkyrimAE\mo2\profiles\Default'
 ```
 
-脚本会备份 `modlist.txt`、`plugins.txt`、`loadorder.txt`、预览表和目标 MOD 文件夹，然后改文件夹名并精确替换 `modlist.txt` 条目。它不会安装、删除、启用、禁用或排序 MOD。
+脚本会备份 `modlist.txt`、`plugins.txt`、`loadorder.txt`、预览表、rename map 和每个目标文件夹的 manifest（文件数、总大小），然后改文件夹名并精确替换 `modlist.txt` 条目。默认不复制 MOD 文件内容（改名不改内容，manifest 足够回滚和验收）；需要内容级备份时传 `-CopyFolders`。它不会安装、删除、启用、禁用或排序 MOD。
 
-### 6. 验收
+### 7. 验收
 
 ```powershell
 pwsh -File .\scripts\Verify-RenameMap.ps1 `
@@ -152,6 +181,7 @@ pwsh -File .\scripts\Restore-RenameBackup.ps1 `
 2. [`docs/ai-runbook.md`](docs/ai-runbook.md)
 3. [`docs/naming-standard.md`](docs/naming-standard.md)
 4. [`docs/safety-and-recovery.md`](docs/safety-and-recovery.md)
+5. [`docs/sorting-and-spacers.md`](docs/sorting-and-spacers.md) —— **仅当本次要动排序时才需要**
 
 然后提供：
 
@@ -160,6 +190,7 @@ pwsh -File .\scripts\Restore-RenameBackup.ps1 `
 - 本次要处理的范围，例如某个分隔区、顶部 N 条或明确的 MOD 名称
 - 是否允许访问 Nexus 页面
 - 是否只生成预览，或已经明确批准应用
+- **是否要顺带整理排序**（默认不要；这一项必须显式说明）
 
 推荐委托语句：
 
@@ -178,8 +209,10 @@ pwsh -File .\scripts\Restore-RenameBackup.ps1 `
 │   └── tag-vocabulary.json
 ├── docs/
 │   ├── ai-runbook.md
+│   ├── HANDOFF-PI.md
 │   ├── naming-standard.md
 │   ├── safety-and-recovery.md
+│   ├── sorting-and-spacers.md
 │   └── workflow.md
 ├── examples/
 │   └── rename-map.csv
@@ -188,6 +221,8 @@ pwsh -File .\scripts\Restore-RenameBackup.ps1 `
 ├── scripts/
 │   ├── Get-MO2ModInventory.ps1
 │   ├── Build-AuthorSeriesRegistry.ps1
+│   ├── Get-TagStatistics.ps1
+│   ├── New-RenameMapDraft.ps1
 │   ├── New-RenamePreview.ps1
 │   ├── Apply-RenameMap.ps1
 │   ├── Verify-RenameMap.ps1
@@ -207,3 +242,4 @@ pwsh -File .\scripts\Restore-RenameBackup.ps1 `
 ## License
 
 MIT，详见 [`LICENSE`](LICENSE)。
+

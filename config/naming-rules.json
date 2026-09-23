@@ -1,7 +1,25 @@
 {
-  "format": "{anchor}·{local} — {english} — {tags}",
+  "version": "2.0",
+  "updated": "2026-09-23",
+  "format": "[{author}] {local} - {variant} (by {patcher}) — {english} — {tags}",
+  "formatNote": "段 1 为中文段（母体作者前缀 + 功能名 + 变体/层级 + 补丁作者），段 2 为官方英文标题，段 3 为标签池。段 1 中除功能名外均可省略。",
   "separator": " — ",
   "tagDelimiters": ["【", "】"],
+  "authorPrefix": {
+    "open": "[",
+    "close": "]",
+    "placement": "name-front",
+    "rule": "中括号前缀永远属于装备/系统的原作者母体；补丁或材质作者不得占据前缀。"
+  },
+  "authorTagFallback": "【作者·{name}】",
+  "authorTagFallbackRule": "仅当作者无法作为母体前缀时（多人协作、来源本地、作者不明），作者才回落到末尾标签池。",
+  "variantSeparator": " - ",
+  "patcherSuffix": " (by {patcher})",
+  "tagSpacing": " ",
+  "deprecatedPatterns": ["·"],
+  "deprecationNote": "禁用密集点号作为名称主体的分隔符；改用带空格的标准短横线。点号仅允许出现在标签内部，如 【服装·护甲】。",
+  "legacyFormat": "作者或系列锚点·中文功能名 — Official English Title — 【标签】【标签】",
+  "legacyNote": "1.x 格式。存量名称无需为格式而重命名；仅在因其它原因触碰该条时顺带升级到 2.0。",
   "reservedTerms": {
     "Overhaul": "大修",
     "Rework": "重制",
@@ -15,7 +33,20 @@
     "Addon": "扩展",
     "Expansion": "扩展"
   },
+  "variantTerms": {
+    "本体": "基础本体（Base Mod / ESP）",
+    "材质": "材质与 PBR 贴图替换层",
+    "物理": "3BA / HIMBO / SMP 物理网格层",
+    "分发": "SPID / KID / DAV 等运行时分发层",
+    "补丁": "兼容性或修复补丁",
+    "预设": "配置 / INI / BodySlide 预设"
+  },
   "preserveAcronyms": ["SKSE", "SPID", "OAR", "MCO", "3BA", "CBBE", "HIMBO", "SMP", "AE", "SE", "VR", "NG", "PBR", "BOS", "KID"],
   "confidenceValues": ["高", "中", "低"],
-  "seriesPolicy": "同作者不等于同系列；必须有标题、页面说明、合集、依赖或作者声明支持。"
+  "seriesPolicy": "同作者不等于同系列；必须有标题、页面说明、合集、依赖或作者声明支持。",
+  "sorting": {
+    "inScope": false,
+    "seeAlso": "docs/sorting-and-spacers.md",
+    "note": "MO2 左栏排序与空 Mod 垫片不属于重命名流程的默认范围。它是本流程的显式扩展，启用前必须明确 opt-in，不得与纯重命名的审阅流程混用。"
+  }
 }

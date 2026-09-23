@@ -11,6 +11,38 @@
 
 不要把“整个 modlist”当成默认范围。范围不清时先输出候选，不修改。
 
+## 阶段 0.5：新安装 MOD 常设计划（推荐）
+
+每次往 MO2 装了新 MOD 后，重复以下循环：
+
+```powershell
+# 1. 重新盘点，取最新 modlist
+pwsh -File .\scripts\Get-MO2ModInventory.ps1 `
+  -ModsPath 'E:\SkyrimAE\mo2\mods' `
+  -ProfilePath 'E:\SkyrimAE\mo2\profiles\Default' `
+  -OutputPath '.\work\inventory.csv'
+
+# 2. 登记表（无 Nexus key 时加 -SkipNexus）
+pwsh -File .\scripts\Build-AuthorSeriesRegistry.ps1 `
+  -InventoryPath '.\work\inventory.csv' `
+  -OutputPath '.\work\registry.csv' -SkipNexus
+
+# 3. 只处理 98 测试区分隔区以上的新条目
+pwsh -File .\scripts\New-RenameMapDraft.ps1 `
+  -InventoryPath '.\work\inventory.csv' `
+  -RegistryPath '.\work\registry.csv' `
+  -OutputPath '.\work\rename-map-draft-98.csv' `
+  -Separator '98 新安装 MOD 测试区'
+```
+
+初稿中 `Status=待补中文名` 的行才是本次要处理的。之后照常：Nexus 页面核对 → 填 rename map → `New-RenamePreview.ps1` → 用户批准 → 关 MO2 → `Apply-RenameMap.ps1`（自动备份）→ `Verify-RenameMap.ps1`。
+
+要点：
+
+- 汉化条目与其本体用同一母体作者前缀和相近中文名，排在相邻位置便于辨识；
+- 本地安装（modid=0/无 meta）无页面可核对，标`中`置信度并在 ReviewNote 注明依据；
+- houseCARL 等工具产出的重制文件夹与本体一起改名，标注【来源·本地】。
+
 ## 阶段 1：本地事实盘点
 
 以 `ProfilePath/modlist.txt` 的 `+`/`-` 条目作为 profile 视图，再去 `ModsPath` 找同名文件夹。记录：
@@ -53,10 +85,9 @@ AI 或人负责语义部分，用户负责最终批准。
 
 应用操作严格限制为：
 
-1. 备份目标文件夹；
-2. 备份 `modlist.txt`、`plugins.txt`、`loadorder.txt`；
-3. 改目标文件夹名；
-4. 精确替换 `modlist.txt` 中对应名称。
+1. 备份 `modlist.txt`、`plugins.txt`、`loadorder.txt`、预览表、rename map 和每个目标文件夹的 manifest（文件数、总大小）；默认不复制文件夹内容，需要内容级备份时传 `-CopyFolders`；
+2. 改目标文件夹名；
+3. 精确替换 `modlist.txt` 中对应名称。
 
 不安装、不删除、不启用、不禁用、不排序，也不编辑插件二进制。
 
@@ -65,9 +96,13 @@ AI 或人负责语义部分，用户负责最终批准。
 验收必须分别报告：
 
 - 文件夹是否一一对应；
-- 文件内容是否与应用前一致；
+- 文件内容是否与应用前一致（`-CopyFolders` 备份按逐文件对比，默认按 manifest 的文件数和总大小对比）；
 - 旧名称是否清除、新名称是否出现；
 - `+`/`-` 和行号是否保持；
 - `plugins.txt` 和 `loadorder.txt` 是否保持；
 - 其他条目是否无差异；
 - 备份位置和仍不确定的语义判断。
+
+## 阶段 6：回滚
+
+默认按 rename map 把新文件夹改回旧名并恢复 `modlist.txt`；`-CopyFolders` 备份从 `mods\` 复制恢复。`plugins.txt` / `loadorder.txt` 默认不恢复。

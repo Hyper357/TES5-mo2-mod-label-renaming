@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory)]
     [string]$InventoryPath,
@@ -13,14 +13,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Export-Utf8NoBom {
+function Export-Utf8Csv {
     param([Parameter(Mandatory)] [object[]]$Data, [Parameter(Mandatory)] [string]$Path)
     $parent = Split-Path -Parent $Path
     if ($parent) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("mod-registry-" + [guid]::NewGuid().ToString() + '.csv')
     try {
         $Data | Export-Csv -LiteralPath $temp -NoTypeInformation -Encoding utf8
-        [IO.File]::WriteAllText($Path, [IO.File]::ReadAllText($temp), [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($Path, [IO.File]::ReadAllText($temp), [Text.UTF8Encoding]::new($true))
     }
     finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
 }
@@ -85,7 +85,7 @@ if (-not $SkipNexus -and $apiKeyValue -and $uniqueIds.Count -gt 0) {
     finally { $client.Dispose() }
 }
 
-if ($cache.Count -gt 0) { Export-Utf8NoBom -Data @($cache.Values | Sort-Object { [int]$_.ModId }) -Path $CachePath }
+if ($cache.Count -gt 0) { Export-Utf8Csv -Data @($cache.Values | Sort-Object { [int]$_.ModId }) -Path $CachePath }
 
 $registry = foreach ($row in $inventory) {
     $api = if ($row.ModId -and $cache.ContainsKey([string]$row.ModId)) { $cache[[string]$row.ModId] } else { $null }
@@ -113,7 +113,7 @@ $registry = foreach ($row in $inventory) {
     }
 }
 
-Export-Utf8NoBom -Data @($registry) -Path $OutputPath
+Export-Utf8Csv -Data @($registry) -Path $OutputPath
 Write-Output "Registry=$OutputPath"
 Write-Output "Rows=$($registry.Count)"
 Write-Output "NexusIds=$(@($registry | Where-Object { $_.ModId -and $_.ModId -ne '0' } | Select-Object -ExpandProperty ModId -Unique).Count)"
