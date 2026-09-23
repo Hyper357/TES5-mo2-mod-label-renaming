@@ -1,5 +1,7 @@
 ﻿# MOD 标签与重命名工作流
 
+[![validate](https://github.com/Hyper357/TES5-mo2-mod-label-renaming/actions/workflows/validate.yml/badge.svg)](https://github.com/Hyper357/TES5-mo2-mod-label-renaming/actions/workflows/validate.yml)
+
 一个面向 Skyrim Special Edition / Anniversary Edition、Mod Organizer 2（MO2）的可复用 MOD 整理流程。
 
 这个项目不是 MOD 列表、整合包或游戏文件备份。它提供一套可以交给其他 AI、协作者或自己重复使用的工作方法：
